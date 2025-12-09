@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Create Class{% endblock %}
+
+{% block content %}
+<h3>Create a New Class</h3>
+<form method="POST">
+    <div class="mb-3">
+        <label>Class Name</label>
+        <input type="text" name="name" class="form-control" required>
+    </div>
+    <div class="mb-3">
+        <label>Batch</label>
+        <input type="text" name="batch" class="form-control">
+    </div>
+    <div class="mb-3">
+        <label>Description</label>
+        <textarea name="description" class="form-control"></textarea>
+    </div>
+
+    <!-- Timetable slot picker -->
+    <div class="mb-3">
+        <label>Select Class Slots</label>
+        <table class="table table-bordered timetable">
+            {% set days = ["MON","TUE","WED","THU","FRI"] %}
+            {% set slots = ["A1","B1","C1","D1","E1","F1","G1","TA1","TB1","TC1","TD1","TE1","TF1","TG1"] %}
+            <tr>
+                <th>Day / Slot</th>
+                {% for s in slots %}
+                <th>{{ s }}</th>
+                {% endfor %}
+            </tr>
+            {% for day in days %}
+            <tr>
+                <td><strong>{{ day }}</strong></td>
+                {% for s in slots %}
+                    {% set code = day ~ "_" ~ s %}
+                    <td class="slot {% if code in occupied_slots %}disabled{% endif %}" 
+                        data-slot="{{ code }}">
+                        {{ s }}
+                    </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </table>
+        <input type="hidden" name="slots" id="selectedSlots">
+    </div>
+
+    <button type="submit" class="btn btn-success">Create Class</button>
+</form>
+
+<style>
+    .slot { cursor: pointer; padding: 6px; text-align: center; }
+    .slot.selected { background-color: #4caf50; color: white; }
+    .slot.disabled { background-color: #ccc; color: #666; cursor: not-allowed; }
+</style>
+
+<script>
+    const selected = new Set();
+    document.querySelectorAll(".slot").forEach(cell => {
+        if (!cell.classList.contains("disabled")) {
+            cell.addEventListener("click", () => {
+                const slot = cell.dataset.slot;
+                if (selected.has(slot)) {
+                    selected.delete(slot);
+                    cell.classList.remove("selected");
+                } else {
+                    selected.add(slot);
+                    cell.classList.add("selected");
+                }
+                document.getElementById("selectedSlots").value = Array.from(selected).join(",");
+            });
+        }
+    });
+</script>
+{% endblock %}

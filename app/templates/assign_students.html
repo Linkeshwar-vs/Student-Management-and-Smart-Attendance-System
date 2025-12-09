@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Assign Students{% endblock %}
+
+{% block content %}
+<h2>Assign Students to {{ cls.name }}</h2>
+
+<form method="GET" class="row g-3 mb-3">
+    <!-- filters remain same -->
+</form>
+
+<form method="POST">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Select</th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Reg No</th>
+                <th>Branch</th>
+                <th>Specialization</th>
+                <th>Batch</th>
+                <th>Clash</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in students %}
+            <tr>
+                <td>
+                    {% if s.id in clashes %}
+                        <input type="checkbox" disabled>
+                    {% else %}
+                        <input type="checkbox" name="students" value="{{ s.id }}"
+                               {% if s in cls.students %}checked{% endif %}>
+                    {% endif %}
+                </td>
+                <td>{{ s.name }}</td>
+                <td>{{ s.email }}</td>
+                <td>{{ s.reg_no }}</td>
+                <td>{{ s.branch or '-' }}</td>
+                <td>{{ s.specialization or '-' }}</td>
+                <td>{{ s.batch or '-' }}</td>
+                <td>
+                    {% if s.id in clashes %}
+                        {% for other_cls, slot in clashes[s.id] %}
+                            <span class="badge bg-danger">{{ other_cls }} ({{ slot }})</span><br>
+                        {% endfor %}
+                    {% else %}
+                        <span class="text-success">No clash</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <button type="submit" class="btn btn-success">Assign Selected Students</button>
+</form>
+{% endblock %}

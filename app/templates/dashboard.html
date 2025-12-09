@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <h2 class="fw-bold mb-4 text-primary">Welcome, <span class="username">{{ current_user.name or current_user.email }}</span></h2>
+
+  <!-- Top row: Superadmin & Admin (each 50% width of class panels) -->
+  <div class="row g-4">
+    {% if current_user.is_superadmin %}
+    <div class="col-lg-6 col-12">
+      <div class="card h-100 border-0 shadow-sm">
+        <div class="card-header bg-danger text-white fw-bold">Superadmin</div>
+        <div class="card-body d-flex align-items-center justify-content-center">
+          <a href="{{ url_for('main.assign_admins') }}" class="btn btn-danger w-100">Assign Admins</a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    {% if current_user.is_admin %}
+    <div class="col-lg-6 col-12">
+      <div class="card h-100 border-0 shadow-sm">
+        <div class="card-header bg-primary text-white fw-bold">Admin</div>
+        <div class="card-body d-flex flex-wrap gap-2 justify-content-center">
+          <a href="{{ url_for('main.add_student') }}" class="btn btn-success flex-fill">Add Student</a>
+          <a href="{{ url_for('main.list_students') }}" class="btn btn-secondary flex-fill">Manage Students</a>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- My Classes (full width) -->
+  <div class="card border-0 shadow-sm mt-5">
+    <div class="card-header bg-success text-white fw-bold">My Classes</div>
+    <div class="card-body">
+      <a href="{{ url_for('main.create_class') }}" class="btn btn-outline-success mb-3">Create Class</a>
+      {% if my_classes %}
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Class Name</th>
+              <th>Batch</th>
+              <th>Description</th>
+              <th>Students</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cls in my_classes %}
+            <tr>
+              <td class="fw-semibold">{{ cls.name }}</td>
+              <td>{{ cls.batch or '-' }}</td>
+              <td>{{ cls.description or '-' }}</td>
+              <td>
+                {% if cls.students %}
+                  {% set names = [] %}
+                  {% for s in cls.students %}{% set _ = names.append(s.name) %}{% endfor %}
+                  {% set student_str = ', '.join(names) %}
+                  {% if student_str|length > 30 %}
+                    {{ student_str[:30] }}...
+                    <span class="badge bg-info text-dark">
+                      +{{ cls.students|length - (student_str[:30].count(',') + 1) }} more
+                    </span>
+                  {% else %}
+                    {{ student_str }}
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted">No students assigned</span>
+                {% endif %}
+              </td>
+              <td class="d-flex flex-wrap gap-2">
+                <a href="{{ url_for('main.assign_students', class_id=cls.id) }}" class="btn btn-sm btn-outline-info">Assign</a>
+                <a href="{{ url_for('main.edit_class', class_id=cls.id) }}" class="btn btn-sm btn-outline-warning">Edit</a>
+                <a href="{{ url_for('main.create_attendance', class_id=cls.id) }}" class="btn btn-sm btn-outline-success">Attendance</a>
+                <a href="{{ url_for('main.view_attendance', class_id=cls.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                <a href="{{ url_for('main.auto_attendance_setup', class_id=cls.id) }}" class="btn btn-sm btn-outline-dark">Auto</a>
+                <a href="{{ url_for('main.class_marks', class_id=cls.id) }}" class="btn btn-sm btn-outline-secondary">Marks</a>
+                <a href="{{ url_for('main.create_quiz', class_id=cls.id) }}" class="btn btn-sm btn-outline-primary">Quiz</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted">You haven’t created any classes yet.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if current_user.is_admin %}
+  <!-- All Classes (full width) -->
+  <div class="card border-0 shadow-sm mt-5">
+    <div class="card-header bg-secondary text-white fw-bold">All Classes</div>
+    <div class="card-body">
+      {% if all_classes %}
+      <div class="table-responsive">
+        <table class="table table-bordered align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>Class Name</th>
+              <th>Batch</th>
+              <th>Description</th>
+              <th>Teacher</th>
+              <th>Students</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for cls in all_classes %}
+            <tr>
+              <td class="fw-semibold">{{ cls.name }}</td>
+              <td>{{ cls.batch or '-' }}</td>
+              <td>{{ cls.description or '-' }}</td>
+              <td>{{ cls.teacher.name or cls.teacher.email }}</td>
+              <td>
+                {% if cls.students %}
+                  {% set names = [] %}
+                  {% for s in cls.students %}{% set _ = names.append(s.name) %}{% endfor %}
+                  {% set student_str = ', '.join(names) %}
+                  {% if student_str|length > 30 %}
+                    {{ student_str[:30] }}...
+                    <span class="badge bg-info text-dark">
+                      +{{ cls.students|length - (student_str[:30].count(',') + 1) }} more
+                    </span>
+                  {% else %}
+                    {{ student_str }}
+                  {% endif %}
+                {% else %}
+                  <span class="text-muted">No students assigned</span>
+                {% endif %}
+              </td>
+              <td class="d-flex flex-wrap gap-2">
+                <a href="{{ url_for('main.assign_students', class_id=cls.id) }}" class="btn btn-sm btn-outline-info">Assign</a>
+                <a href="{{ url_for('main.edit_class', class_id=cls.id) }}" class="btn btn-sm btn-outline-warning">Edit</a>
+                <a href="{{ url_for('main.create_attendance', class_id=cls.id) }}" class="btn btn-sm btn-outline-success">Attendance</a>
+                <a href="{{ url_for('main.view_attendance', class_id=cls.id) }}" class="btn btn-sm btn-outline-primary">View</a>
+                <a href="{{ url_for('main.create_quiz', class_id=cls.id) }}" class="btn btn-sm btn-outline-primary">Quiz</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted">No classes available.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block styles %}
+<style>
+  .username { font-weight:600; color:#0d6efd; }
+  .card { border-radius:10px; }
+  .table td,.table th { vertical-align:middle; }
+  .badge { font-size:0.8rem; }
+</style>
+{% endblock %}

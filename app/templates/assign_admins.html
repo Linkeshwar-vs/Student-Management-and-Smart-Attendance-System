@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Assign Admins{% endblock %}
+
+{% block content %}
+<h2>Manage Admins</h2>
+
+<!-- Search box -->
+<input type="text" id="teacherSearch" class="form-control mb-3" placeholder="Search by name or email...">
+
+<table class="table table-bordered" id="teachersTable">
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Admin?</th>
+            <th>Superadmin?</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for t in teachers %}
+        <tr>
+            <td>{{ t.name }}</td>
+            <td>{{ t.email }}</td>
+            <td>{{ '✅' if t.is_admin else '❌' }}</td>
+            <td>{{ '✅' if t.is_superadmin else '❌' }}</td>
+            <td>
+                {% if not t.is_superadmin %}
+                    <a href="{{ url_for('main.toggle_admin', teacher_id=t.id) }}" class="btn btn-sm btn-info">
+                        {{ 'Revoke Admin' if t.is_admin else 'Make Admin' }}
+                    </a>
+                    <a href="{{ url_for('main.delete_teacher', teacher_id=t.id) }}" class="btn btn-sm btn-danger"
+                       onclick="return confirm('Delete this teacher?')">Delete</a>
+                {% else %}
+                    <span class="badge bg-secondary">Superadmin</span>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Filter logic -->
+<script>
+document.getElementById("teacherSearch").addEventListener("keyup", function() {
+    let filter = this.value.toLowerCase();
+    let rows = document.querySelectorAll("#teachersTable tbody tr");
+
+    rows.forEach(row => {
+        let name = row.cells[0].textContent.toLowerCase();
+        let email = row.cells[1].textContent.toLowerCase();
+
+        if (name.includes(filter) || email.includes(filter)) {
+            row.style.display = "";
+        } else {
+            row.style.display = "none";
+        }
+    });
+});
+</script>
+{% endblock %}

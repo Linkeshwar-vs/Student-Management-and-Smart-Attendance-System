@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Create Attendance{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Create Attendance for {{ cls.name }}</h2>
+
+    <form method="POST" action="{{ url_for('main.create_attendance', class_id=cls.id) }}">
+        <div class="mb-3">
+            <label class="form-label">Select Attendance Methods:</label><br>
+            <div class="form-check form-check-inline">
+                <!-- Manual: always checked & disabled -->
+                <input class="form-check-input" type="checkbox" name="methods" value="manual" id="manualCheck" checked disabled>
+                <label class="form-check-label" for="manualCheck">Manual</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input method-checkbox" type="checkbox" name="methods" value="qr" id="qrCheck">
+                <label class="form-check-label" for="qrCheck">QR</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input method-checkbox" type="checkbox" name="methods" value="face" id="faceCheck">
+                <label class="form-check-label" for="faceCheck">Face Recognition</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input method-checkbox" type="checkbox" name="methods" value="geo" id="geoCheck">
+                <label class="form-check-label" for="geoCheck">Geo Location</label>
+            </div>
+        </div>
+
+        <!-- QR Options -->
+        <div class="mb-3" id="qrOptions" style="display:none;">
+            <label class="form-label">QR Type:</label><br>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="qr_type" value="static" id="staticQR">
+                <label class="form-check-label" for="staticQR">Static QR</label>
+            </div>
+            <div class="form-check form-check-inline">
+                <input class="form-check-input" type="radio" name="qr_type" value="rotate" id="rotateQR">
+                <label class="form-check-label" for="rotateQR">Rotating QR</label>
+            </div>
+            <div class="mt-2" id="rotateSecondsDiv" style="display:none;">
+                <label for="qr_rotate_seconds" class="form-label">Rotation Interval (seconds):</label>
+                <input type="number" class="form-control w-25" name="qr_rotate_seconds" min="5" value="10">
+            </div>
+        </div>
+
+        <!-- Face Info -->
+        <div class="mb-3" id="faceInfo" style="display:none; border:1px solid #ddd; padding:10px; border-radius:5px;">
+            Loading face data...
+        </div>
+
+        <!-- Spoof Detection -->
+        <div class="form-check mt-2" id="spoofOption" style="display:none;">
+            <input class="form-check-input" type="checkbox" name="spoof_detection" id="spoofDetection">
+            <label class="form-check-label" for="spoofDetection">Enable Spoof Detection <span class="badge bg-warning">Beta</span></label>
+        </div>
+
+        <!-- Geo Options -->
+        <div class="mb-3" id="geoOptions" style="display:none;">
+            <label class="form-label">Select Class Location:</label>
+            <div id="map" style="height:400px; border:1px solid #ccc;"></div>
+            <input type="hidden" name="geo_lat" id="geo_lat">
+            <input type="hidden" name="geo_lng" id="geo_lng">
+
+            <p class="mt-2">
+                <strong>Latitude:</strong> <span id="latDisplay">-</span> | 
+                <strong>Longitude:</strong> <span id="lngDisplay">-</span>
+            </p>
+
+            <label for="geo_radius" class="form-label mt-2">Proximity Distance (meters):</label>
+            <input type="number" class="form-control w-25" name="geo_radius" id="geo_radius" min="10" value="50">
+        </div>
+
+        <button type="submit" class="btn btn-success mt-3">Create Attendance</button>
+    </form>
+</div>
+
+<!-- Load Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const form = document.querySelector("form");
+    const qrCheck = document.getElementById("qrCheck");
+    const qrOptions = document.getElementById("qrOptions");
+    const rotateQR = document.getElementById("rotateQR");
+    const rotateSecondsDiv = document.getElementById("rotateSecondsDiv");
+    const geoCheck = document.getElementById("geoCheck");
+    const geoOptions = document.getElementById("geoOptions");
+    const faceCheck = document.getElementById("faceCheck");
+    const faceInfo = document.getElementById("faceInfo");
+    const spoofOption = document.getElementById("spoofOption");
+
+    // Manual checkbox always checked
+    const manualCheck = document.getElementById("manualCheck");
+    manualCheck.checked = true;
+
+    // QR logic
+    qrCheck.addEventListener("change", () => {
+        qrOptions.style.display = qrCheck.checked ? "block" : "none";
+    });
+
+    rotateQR.addEventListener("change", () => {
+        rotateSecondsDiv.style.display = rotateQR.checked ? "block" : "none";
+    });
+
+    // Geo logic
+    geoCheck.addEventListener("change", () => {
+        geoOptions.style.display = geoCheck.checked ? "block" : "none";
+        if(geoCheck.checked) setTimeout(initMap, 500);
+    });
+
+    // Face Recognition logic
+    faceCheck.addEventListener("change", async () => {
+        if(faceCheck.checked) {
+            faceInfo.style.display = "block";
+            spoofOption.style.display = "block";
+            await loadFaceStats();
+        } else {
+            faceInfo.style.display = "none";
+            spoofOption.style.display = "none";
+        }
+    });
+
+    // Validation before submit
+    form.addEventListener("submit", (e) => {
+        if(qrCheck.checked) {
+            const qrSelected = document.querySelector('input[name="qr_type"]:checked');
+            if(!qrSelected) {
+                alert("Please select a QR type (Static or Rotating).");
+                e.preventDefault();
+            }
+        }
+    });
+
+    // Fetch face stats
+    async function loadFaceStats() {
+        const res = await fetch(`{{ url_for('main.get_face_stats', class_id=cls.id) }}`);
+        const data = await res.json();
+        faceInfo.innerHTML = `
+            <p><strong>Total Students:</strong> ${data.total}</p>
+            <p><strong>With Embeddings:</strong> ${data.with_embeddings}</p>
+            <p><strong>Without Embeddings:</strong> ${data.without_embeddings}</p>
+        `;
+    }
+
+    // Map initialization
+    function initMap() {
+        if(window.mapInitialized) return;
+        window.mapInitialized = true;
+
+        const map = L.map('map').fitWorld();
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "© OpenStreetMap contributors"
+        }).addTo(map);
+
+        let marker, circle;
+
+        map.locate({
+            setView: true,
+            maxZoom: 18,
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 0
+        });
+
+        map.on("locationfound", function(e) {
+            if(!marker) {
+                marker = L.marker(e.latlng, {draggable:true}).addTo(map);
+                updateLatLng(e.latlng.lat, e.latlng.lng);
+                marker.on("dragend", function(evt) {
+                    const pos = evt.target.getLatLng();
+                    updateLatLng(pos.lat, pos.lng);
+                    if(circle) circle.setLatLng(pos);
+                });
+            } else {
+                marker.setLatLng(e.latlng);
+            }
+
+            if(!circle) {
+                circle = L.circle(e.latlng, {
+                    radius: parseInt(document.getElementById("geo_radius").value),
+                    color: "blue",
+                    fillOpacity: 0.2
+                }).addTo(map);
+            } else {
+                circle.setLatLng(e.latlng);
+            }
+        });
+
+        map.on("locationerror", function() {
+            alert("Location access denied or unavailable. Please enable precise GPS.");
+        });
+
+        map.on("click", function(e) {
+            if(!marker) {
+                marker = L.marker(e.latlng, {draggable:true}).addTo(map);
+            } else {
+                marker.setLatLng(e.latlng);
+            }
+            updateLatLng(e.latlng.lat, e.latlng.lng);
+
+            if(!circle) {
+                circle = L.circle(e.latlng, {
+                    radius: parseInt(document.getElementById("geo_radius").value),
+                    color: "blue",
+                    fillOpacity: 0.2
+                }).addTo(map);
+            } else {
+                circle.setLatLng(e.latlng);
+            }
+        });
+
+        document.getElementById("geo_radius").addEventListener("input", function() {
+            if(circle) {
+                circle.setRadius(parseInt(this.value));
+            }
+        });
+
+        function updateLatLng(lat, lng) {
+            document.getElementById("geo_lat").value = lat;
+            document.getElementById("geo_lng").value = lng;
+            document.getElementById("latDisplay").innerText = lat.toFixed(6);
+            document.getElementById("lngDisplay").innerText = lng.toFixed(6);
+        }
+    }
+});
+</script>
+{% endblock %}

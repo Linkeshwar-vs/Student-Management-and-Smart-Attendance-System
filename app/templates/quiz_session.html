@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>Quiz Session: {{ quiz.title }}</h2>
+  <p><strong>Class:</strong> {{ quiz.class_rel.name }} |
+     <strong>Difficulty:</strong> {{ quiz.difficulty }} |
+     <strong>Questions:</strong> {{ quiz.questions|length }}</p>
+
+  {% if quiz.is_active %}
+    <div class="alert alert-success">Quiz is live for students.</div>
+    <form action="{{ url_for('main.end_quiz', quiz_id=quiz.id) }}" method="POST">
+      <button type="submit" class="btn btn-warning">Close Quiz</button>
+    </form>
+  {% else %}
+    <div class="alert alert-info">Quiz is currently closed.</div>
+    <form action="{{ url_for('main.start_quiz', quiz_id=quiz.id) }}" method="POST">
+      <button type="submit" class="btn btn-success">Open Quiz</button>
+    </form>
+  {% endif %}
+
+  <hr>
+  <h4>Questions</h4>
+  <ol>
+    {% for q in quiz.questions|sort(attribute='index') %}
+      <li class="mb-3">
+        <strong>{{ q.stem }}</strong>
+        <ul>
+          {% for opt in q.options %}
+            <li {% if opt.id == q.correct_option_id %}class="text-success fw-bold"{% endif %}>
+              {{ opt.idx_char }}) {{ opt.text }}
+            </li>
+          {% endfor %}
+        </ul>
+      </li>
+    {% endfor %}
+  </ol>
+</div>
+{% endblock %}

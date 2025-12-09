@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}Attendance - {{ cls.name }}{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h2>Attendance Session: {{ cls.name }}</h2>
+    <p><strong>Batch:</strong> {{ cls.batch or '-' }} | 
+       <strong>Description:</strong> {{ cls.description or '-' }}</p>
+
+    <!-- Attendance Options -->
+    <div class="card p-3 mb-4">
+        <h4>Attendance Options</h4>
+        <ul>
+            {% if attendance.qr_type %}
+            <li>
+                QR Code: 
+                {% if attendance.qr_type == 'static' %}
+                    Static QR
+                {% else %}
+                    Rotating QR (Interval: {{ attendance.qr_rotate_seconds }} sec)
+                {% endif %}
+            </li>
+            <div class="my-2">
+                <img src="{{ url_for('main.get_qr', attendance_id=attendance.id) }}" 
+                     alt="QR Code" id="qr-img" style="width:200px;height:200px;">
+                {% if attendance.qr_type != 'static' %}
+                <script>
+                    const rotate_seconds = {{ attendance.qr_rotate_seconds or 10 }};
+                    setInterval(() => {
+                        const img = document.getElementById('qr-img');
+                        img.src = "{{ url_for('main.get_qr', attendance_id=attendance.id) }}" + "?t=" + new Date().getTime();
+                    }, rotate_seconds * 1000);
+                </script>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if attendance.geo_lat and attendance.geo_lng %}
+            <li>Geo Location Attendance Enabled</li>
+            <div id="map" style="height: 300px; width: 100%; margin-top: 10px;"></div>
+            <p>Proximity: {{ attendance.geo_radius }} meters</p>
+            <input type="hidden" id="geo_lat" value="{{ attendance.geo_lat }}">
+            <input type="hidden" id="geo_lng" value="{{ attendance.geo_lng }}">
+            {% endif %}
+
+            {% if attendance.face_enabled %}
+            <li>Face Recognition Enabled</li>
+            {% endif %}
+            {% if attendance.manual_enabled %}
+            <li>Manual Attendance Enabled</li>
+            {% endif %}
+        </ul>
+    </div>
+
+    <!-- Session Status Toggle -->
+    <div class="mb-3">
+        <span class="fw-bold">Attendance session status: </span>
+        <button id="sessionToggleBtn" class="btn btn-secondary">Loading...</button>
+    </div>
+
+    <!-- Attendance Table -->
+    <div class="card p-3">
+        <h4>Mark Attendance</h4>
+        <table class="table table-bordered table-striped">
+            <thead>
+                <tr>
+                    <th>Photo</th>
+                    <th>Reg No</th>
+                    <th>Name</th>
+                    <th>Branch</th>
+                    <th>Specialization</th>
+                    <th>Batch</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="attendanceTable">
+                {% for record in attendance.records %}
+                <tr data-record-id="{{ record.id }}">
+                    <td>
+                        <div class="photo-wrapper">
+                            {% if record.student.image_path %}
+                                <img src="{{ url_for('uploaded_file', filename=record.student.image_path) }}"
+                                     alt="Student Image"
+                                     style="width:50px;height:50px;border-radius:50%;">
+                            {% else %}
+                                <img src="{{ url_for('static', filename='default.png') }}" 
+                                     style="width:50px;height:50px;border-radius:50%;">
+                            {% endif %}
+                            <!-- Embedding dot -->
+                            <span class="status-dot dot-red"></span>
+                        </div>
+                    </td>
+
+                    <td>{{ record.student.reg_no }}</td>
+                    <td>{{ record.student.name }}</td>
+                    <td>{{ record.student.branch or '-' }}</td>
+                    <td>{{ record.student.specialization or '-' }}</td>
+                    <td>{{ record.student.batch or '-' }}</td>
+                    <td>
+                        <button class="btn toggle-btn {{ 'present-btn' if record.is_present else 'absent-btn' }}">
+                            {{ 'Present' if record.is_present else 'Absent' }}
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="mt-3">
+            <button class="btn btn-primary" 
+                    onclick="
+                        if(confirm('Are you sure you want to end this attendance session?')) {
+                            fetch('{{ url_for('main.end_attendance', attendance_id=attendance.id) }}', { method:'POST' })
+                            .then(res => res.json())
+                            .then(data => { 
+                                if(data.success){ 
+                                    alert('Attendance ended.'); 
+                                    window.location.href='{{ url_for('main.dashboard') }}'; 
+                                }
+                            });
+                        }
+                    ">
+                End Attendance
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Styles -->
+<style>
+.present-btn {
+    background-color: #28a745;
+    color: white;
+}
+.absent-btn {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* Photo wrapper for positioning */
+.photo-wrapper {
+    position: relative;
+    display: inline-block;
+}
+
+/* Status dot positioned top-right */
+.status-dot {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid white; /* optional white border for visibility */
+}
+.dot-green { background-color: #28a745; }
+.dot-red { background-color: #dc3545; }
+</style>
+
+
+<!-- Scripts -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+const attendanceId = {{ attendance.id }};
+
+// --- Toggle Student Attendance ---
+document.querySelectorAll(".toggle-btn").forEach(btn => {
+    btn.addEventListener("click", function () {
+        const row = this.closest("tr");
+        const recordId = row.dataset.recordId;
+
+        fetch(`/toggle_attendance/${recordId}`, { method: "POST" })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    updateStudentButton(this, data.is_present);
+                }
+            });
+    });
+});
+
+function updateStudentButton(btn, isPresent) {
+    if (isPresent) {
+        btn.classList.remove("absent-btn");
+        btn.classList.add("present-btn");
+        btn.textContent = "Present";
+    } else {
+        btn.classList.remove("present-btn");
+        btn.classList.add("absent-btn");
+        btn.textContent = "Absent";
+    }
+}
+
+// --- Toggle Session Active/Inactive ---
+const sessionToggleBtn = document.getElementById("sessionToggleBtn");
+sessionToggleBtn.addEventListener("click", function () {
+    fetch(`/toggle_session/${attendanceId}`, { method: "POST" })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) updateSessionButton(data.is_active);
+        });
+});
+
+function updateSessionButton(isActive) {
+    if (isActive) {
+        sessionToggleBtn.textContent = "Active";
+        sessionToggleBtn.className = "btn btn-success";
+    } else {
+        sessionToggleBtn.textContent = "Inactive";
+        sessionToggleBtn.className = "btn btn-danger";
+    }
+}
+
+// --- Polling for updates ---
+function pollUpdates() {
+    // Get session status
+    fetch(`/get_session_status/${attendanceId}`)
+        .then(r => r.json())
+        .then(data => updateSessionButton(data.is_active));
+
+    // Get attendance + embedding status
+    fetch("{{ url_for('main.get_attendance_status', attendance_id=attendance.id) }}")
+    .then(res => res.json())
+    .then(data => {
+        data.forEach(record => {
+            const row = document.querySelector(`tr[data-record-id="${record.id}"]`);
+            if (row) {
+                const btn = row.querySelector(".toggle-btn");
+                if (btn) updateStudentButton(btn, record.is_present);
+
+                const dot = row.querySelector(".status-dot");
+                if(dot){
+                    if(record.has_embedding){
+                        dot.classList.remove("dot-red");
+                        dot.classList.add("dot-green");
+                    } else {
+                        dot.classList.remove("dot-green");
+                        dot.classList.add("dot-red");
+                    }
+                }
+            }
+        });
+    });
+}
+setInterval(pollUpdates, 2000);
+pollUpdates();
+
+// Map rendering
+{% if attendance.geo_lat and attendance.geo_lng %}
+let map = L.map('map').setView([{{ attendance.geo_lat }}, {{ attendance.geo_lng }}], 16);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+L.marker([{{ attendance.geo_lat }}, {{ attendance.geo_lng }}]).addTo(map);
+L.circle([{{ attendance.geo_lat }}, {{ attendance.geo_lng }}], {
+    color: 'blue',
+    fillColor: '#3f87f0',
+    fillOpacity: 0.2,
+    radius: {{ attendance.geo_radius }}
+}).addTo(map);
+{% endif %}
+</script>
+{% endblock %}

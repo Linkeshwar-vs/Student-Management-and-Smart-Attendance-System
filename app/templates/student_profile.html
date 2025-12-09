@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+  <h2>My Profile</h2>
+
+  <div class="btn-group mb-3">
+    <button class="btn btn-outline-primary" onclick="showSection('general')">General</button>
+    <button class="btn btn-outline-primary" onclick="showSection('academics')">Academics</button>
+    <button class="btn btn-outline-primary" onclick="showSection('co_curricular')">Co-Curricular</button>
+    <button class="btn btn-outline-primary" onclick="showSection('internships')">Internships</button>
+    <button class="btn btn-outline-primary" onclick="showSection('remarks')">Remarks</button>
+    <button class="btn btn-outline-primary" onclick="showSection('timetable')">Timetable</button>
+    <a href="{{ url_for('student.reset_password') }}" class="btn btn-outline-danger">Reset Password</a>
+  </div>
+
+  <!-- Sections -->
+  <div id="section-general" class="profile-section">
+    <h4>General Details</h4>
+    <img src="{{ url_for('uploaded_file', filename=student.image_path) }}" class="img-thumbnail mb-3" width="150">
+    <p><b>Name:</b> {{ student.name }}</p>
+    <p><b>Reg No:</b> {{ student.reg_no }}</p>
+    <p><b>Batch:</b> {{ student.batch or "N/A" }}</p>
+    <p><b>Branch:</b> {{ student.branch or "N/A" }}</p>
+    <p><b>Specialization:</b> {{ student.specialization or "N/A" }}</p>
+  </div>
+
+  <div id="section-academics" class="profile-section d-none">
+    <h4>Academics</h4>
+    <p>{{ student.academics or "Nothing to show here." }}</p>
+  </div>
+
+  <div id="section-co_curricular" class="profile-section d-none">
+    <h4>Co-Curricular</h4>
+    <p>{{ student.co_curricular or "Nothing to show here." }}</p>
+  </div>
+
+  <div id="section-internships" class="profile-section d-none">
+    <h4>Internships</h4>
+    <p>{{ student.internships or "Nothing to show here." }}</p>
+  </div>
+
+  <div id="section-remarks" class="profile-section d-none">
+    <h4>Remarks</h4>
+    <p>{{ student.remarks or "Nothing to show here." }}</p>
+  </div>
+
+  <!-- Timetable Section -->
+  <div id="section-timetable" class="profile-section d-none">
+  <h4>My Timetable</h4>
+  <table class="table table-bordered timetable">
+    {% set days = ["MON","TUE","WED","THU","FRI"] %}
+    {% set slots = [
+  ("A1", "08:00 AM", "08:50 AM"),
+  ("F1", "08:55 AM", "09:45 AM"),
+  ("D1", "09:50 AM", "10:40 AM"),
+  ("TB1", "11:45 AM", "12:30 PM"),
+  ("TG1", "12:35 PM", "01:25 PM"),
+  ("", "", ""), 
+  ("A2", "02:00 PM", "02:50 PM"),
+  ("F2", "02:55 PM", "03:45 PM"),
+  ("D2", "03:50 PM", "04:40 PM"),
+  ("TB2", "04:45 PM", "05:35 PM"),
+  ("TG2", "05:40 PM", "06:30 PM"),
+  ("V3", "06:35 PM", "07:25 PM")
+] %}
+
+
+    <!-- Slot timings row -->
+    <tr>
+      <th>Day / Time</th>
+      {% for code, start, end in slots %}
+        <th>
+          {% if code %}
+            <div><b>{{ start }}</b><br>to<br><b>{{ end }}</b></div>
+          {% endif %}
+        </th>
+      {% endfor %}
+    </tr>
+
+    <!-- Slot codes row -->
+    <tr>
+      <th>Slot</th>
+      {% for code, start, end in slots %}
+        <th>{{ code }}</th>
+      {% endfor %}
+    </tr>
+
+    <!-- Student timetable rows -->
+    {% for day in days %}
+    <tr>
+      <td><strong>{{ day }}</strong></td>
+      {% for code, start, end in slots %}
+        <td>
+          {% if code %}
+            {% set full_code = day ~ "_" ~ code %}
+            {% for cls in student.classes if cls.slots and full_code in cls.slots.split(',') %}
+              <span class="badge bg-primary">{{ cls.name }}</span>
+            {% endfor %}
+          {% endif %}
+        </td>
+      {% endfor %}
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+</div>
+
+<style>
+  .timetable th, .timetable td {
+    text-align: center;
+    vertical-align: middle;
+    font-size: 0.85rem;
+  }
+  .timetable td {
+    min-width: 90px;
+    height: 60px;
+  }
+  .timetable td .badge {
+    display: block;
+    margin: 2px 0;
+    font-size: 0.8rem;
+    white-space: normal;
+  }
+</style>
+
+<script>
+function showSection(section) {
+  document.querySelectorAll(".profile-section").forEach(el => el.classList.add("d-none"));
+  document.getElementById("section-" + section).classList.remove("d-none");
+}
+</script>
+{% endblock %}

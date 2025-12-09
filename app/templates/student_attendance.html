@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+  <h2>Attendance Records - {{ student.name }}</h2>
+
+  {% set total = attendance_records|length %}
+  {% set present = attendance_records|selectattr("is_present")|list|length %}
+  {% set absent = total - present %}
+  {% set percentage = (present / total * 100) if total > 0 else 0 %}
+  {% set default_threshold = 75 %}
+
+  <!-- Summary Row -->
+  <div class="row text-center mb-4">
+    <!-- Circular progress -->
+    <div class="col-md-3 d-flex justify-content-center">
+      <div style="position: relative; width: 150px; height: 150px;">
+        <svg viewBox="0 0 36 36" style="width: 100%; height: 100%;">
+          <path
+            d="M18 2.0845
+               a 15.9155 15.9155 0 0 1 0 31.831
+               a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            stroke="#e6e6e6"
+            stroke-width="3"
+          ></path>
+          <path
+            d="M18 2.0845
+               a 15.9155 15.9155 0 0 1 0 31.831
+               a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            stroke="#28a745"
+            stroke-width="3"
+            stroke-dasharray="{{ percentage }}, 100"
+            stroke-linecap="round"
+          ></path>
+        </svg>
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+          <strong>{{ percentage|round(1) }}%</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Present -->
+    <div class="col-md-3 d-flex align-items-center justify-content-center">
+      <div class="card shadow-sm border-success" style="min-width: 120px;">
+        <div class="card-body p-2">
+          <h6 class="text-success">Present</h6>
+          <h4>{{ present }}</h4>
+        </div>
+      </div>
+    </div>
+
+    <!-- Absent -->
+    <div class="col-md-3 d-flex align-items-center justify-content-center">
+      <div class="card shadow-sm border-danger" style="min-width: 120px;">
+        <div class="card-body p-2">
+          <h6 class="text-danger">Absent</h6>
+          <h4>{{ absent }}</h4>
+        </div>
+      </div>
+    </div>
+
+    <!-- Threshold -->
+    <div class="col-md-3 d-flex align-items-center justify-content-center">
+      <div class="card shadow-sm border-primary" style="min-width: 120px;">
+        <div class="card-body p-2">
+          <h6 class="text-primary">Threshold</h6>
+          <input type="number" id="threshold" value="{{ default_threshold }}" 
+                 min="1" max="100" class="form-control text-center">
+          <small id="calcResult" class="d-block mt-2"></small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Attendance Table -->
+  <table class="table table-bordered table-striped">
+    <thead>
+      <tr>
+        <th>Class</th>
+        <th>Date</th>
+        <th>Time</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for record in attendance_records|sort(attribute='attendance.created_at', reverse=true) %}
+      <tr>
+        <td>{{ record.attendance.class_rel.name }}</td>
+        <td>{{ record.attendance.created_at.strftime("%Y-%m-%d") }}</td>
+        <td>{{ record.attendance.created_at.strftime("%H:%M:%S") }}</td>
+        <td>
+          {% if record.is_present %}
+            <span class="badge bg-success">Present</span>
+          {% else %}
+            <span class="badge bg-danger">Absent</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<script>
+  function calculateAttendance() {
+    const total = {{ total }};
+    const present = {{ present }};
+    const threshold = parseFloat(document.getElementById("threshold").value) || 75;
+    const calcDiv = document.getElementById("calcResult");
+
+    if (total === 0) {
+      calcDiv.innerHTML = "No classes yet.";
+      return;
+    }
+
+    const currentPercent = (present / total) * 100;
+
+    if (currentPercent >= threshold) {
+      // max skips formula
+      let skips = Math.floor((present * 100 / threshold) - total);
+      calcDiv.innerHTML = `<span class="text-success">+${skips} classes can be skipped</span>`;
+    } else {
+      // required formula
+      let needed = Math.ceil((threshold * total - 100 * present) / (100 - threshold));
+      calcDiv.innerHTML = `<span class="text-danger">-${needed} classes must be attended</span>`;
+    }
+  }
+
+  document.getElementById("threshold").addEventListener("input", calculateAttendance);
+  calculateAttendance();  // initial call
+</script>
+{% endblock %}

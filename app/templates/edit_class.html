@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Edit Class{% endblock %}
+
+{% block content %}
+<h3>Edit Class</h3>
+<form method="POST">
+    <div class="mb-3">
+        <label>Class Name</label>
+        <input type="text" name="name" class="form-control" value="{{ cls.name }}" required>
+    </div>
+    <div class="mb-3">
+        <label>Batch</label>
+        <input type="text" name="batch" class="form-control" value="{{ cls.batch }}">
+    </div>
+    <div class="mb-3">
+        <label>Description</label>
+        <textarea name="description" class="form-control">{{ cls.description }}</textarea>
+    </div>
+
+    <!-- Timetable slot picker -->
+    <div class="mb-3">
+        <label>Select Class Slots</label>
+        <table class="table table-bordered timetable">
+            {% set days = ["MON","TUE","WED","THU","FRI","SAT","SUN"] %}
+            {% set slots = ["A1","F1","D1","TB1","TG1","A2","F2","D2","TB2","TG2","V3"] %}
+            <tr>
+                <th>Day / Slot</th>
+                {% for s in slots %}
+                <th>{{ s }}</th>
+                {% endfor %}
+            </tr>
+            {% for day in days %}
+            <tr>
+                <td><strong>{{ day }}</strong></td>
+                {% for s in slots %}
+                    {% set code = day ~ "_" ~ s %}
+                    <td class="slot
+                        {% if code in occupied_slots and code not in (cls.slots.split(',') if cls.slots else []) %}
+                            disabled
+                        {% elif cls.slots and code in cls.slots.split(',') %}
+                            selected
+                        {% endif %}"
+                        data-slot="{{ code }}">
+                        {{ s }}
+                    </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </table>
+        <input type="hidden" name="slots" id="selectedSlots" value="{{ cls.slots }}">
+    </div>
+
+    <button type="submit" class="btn btn-primary">Update Class</button>
+</form>
+
+<style>
+    .slot { cursor: pointer; padding: 6px; text-align: center; }
+    .slot.selected { background-color: #4caf50; color: white; }
+    .slot.disabled { background-color: #ccc; color: #666; cursor: not-allowed; }
+</style>
+
+<script>
+    const selected = new Set("{{ cls.slots or '' }}".split(",").filter(s => s));
+    function updateHiddenInput() {
+        document.getElementById("selectedSlots").value = Array.from(selected).join(",");
+    }
+    document.querySelectorAll(".slot").forEach(cell => {
+        if (!cell.classList.contains("disabled")) {
+            cell.addEventListener("click", () => {
+                const slot = cell.dataset.slot;
+                if (selected.has(slot)) {
+                    selected.delete(slot);
+                    cell.classList.remove("selected");
+                } else {
+                    selected.add(slot);
+                    cell.classList.add("selected");
+                }
+                updateHiddenInput();
+            });
+        }
+    });
+</script>
+{% endblock %}

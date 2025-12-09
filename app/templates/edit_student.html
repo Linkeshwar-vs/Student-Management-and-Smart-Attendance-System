@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Edit Student{% endblock %}
+
+{% block content %}
+<h2>Edit Student - {{ student.name }}</h2>
+
+<form method="POST" enctype="multipart/form-data">
+    <div class="mb-3">
+        <label for="reg_no" class="form-label">Registration Number (cannot change)</label>
+        <input type="text" class="form-control" id="reg_no" name="reg_no" value="{{ student.reg_no }}" readonly>
+    </div>
+
+    <div class="mb-3">
+        <label for="name" class="form-label">Name</label>
+        <input type="text" class="form-control" id="name" name="name" value="{{ student.name }}" required>
+    </div>
+
+    <div class="mb-3">
+        <label for="email" class="form-label">Email</label>
+        <input type="email" class="form-control" id="email" name="email" value="{{ student.email }}" required>
+    </div>
+
+    <div class="mb-3">
+        <label for="password" class="form-label">Password (leave blank to keep current)</label>
+        <input type="password" class="form-control" id="password" name="password">
+    </div>
+
+    <div class="mb-3">
+        <label for="branch" class="form-label">Branch</label>
+        <input type="text" class="form-control" id="branch" name="branch" value="{{ student.branch or '' }}">
+    </div>
+
+    <div class="mb-3">
+        <label for="specialization" class="form-label">Specialization</label>
+        <input type="text" class="form-control" id="specialization" name="specialization" value="{{ student.specialization or '' }}">
+    </div>
+
+    <div class="mb-3">
+        <label for="batch" class="form-label">Batch</label>
+        <input type="text" class="form-control" id="batch" name="batch" value="{{ student.batch or '' }}">
+    </div>
+
+    <div class="mb-3">
+        <label for="image" class="form-label">Profile Image</label>
+        {% if student.image_path %}
+            <div class="mb-2">
+                <img src="{{ url_for('uploaded_file', filename=student.image_path) }}" alt="Student Image" style="max-height:100px;">
+            </div>
+        {% endif %}
+        <input type="file" class="form-control" id="image" name="image">
+    </div>
+    <div class="mb-3">
+    <label for="academics" class="form-label">Academics</label>
+    <textarea class="form-control" id="academics" name="academics" rows="4">{{ student.academics or '' }}</textarea>
+    </div>
+
+    <div class="mb-3">
+        <label for="co_curricular" class="form-label">Co-Curricular</label>
+        <textarea class="form-control" id="co_curricular" name="co_curricular" rows="4">{{ student.co_curricular or '' }}</textarea>
+    </div>
+
+    <div class="mb-3">
+        <label for="internships" class="form-label">Internships</label>
+        <textarea class="form-control" id="internships" name="internships" rows="4">{{ student.internships or '' }}</textarea>
+    </div>
+
+    <div class="mb-3">
+        <label for="remarks" class="form-label">Remarks</label>
+        <textarea class="form-control" id="remarks" name="remarks" rows="4">{{ student.remarks or '' }}</textarea>
+    </div>
+
+    <button type="submit" class="btn btn-success">Update Student</button>
+    <a href="{{ url_for('main.list_students') }}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

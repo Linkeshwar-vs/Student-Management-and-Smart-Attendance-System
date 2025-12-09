@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Attendance - {{ cls.name }}{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h2>Attendance Sessions: {{ cls.name }}</h2>
+    <table class="table table-bordered table-striped align-middle">
+        <thead class="table-light">
+            <tr>
+                <th>Date & Time</th>
+                <th>Type</th> <!-- Face/QR/Manual -->
+                <th>Mode</th> <!-- NEW: Auto or Manual -->
+                <th>Present</th>
+                <th>Absent</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in session_stats %}
+            <tr>
+                <!-- Session Date -->
+                <td>{{ s.attendance.created_at.strftime('%A, %d %B %Y %H:%M:%S') }}</td>
+
+                <!-- Attendance Type -->
+                <td>
+                    {% if s.attendance.methods %}
+                        {{ s.attendance.methods|capitalize }}
+                    {% else %}
+                        Manual
+                    {% endif %}
+                </td>
+
+                <!-- Attendance Mode -->
+                <td>
+                    {% if s.attendance.created_by_teacher %}
+                        <span class="badge bg-primary">Teacher</span>
+                    {% else %}
+                        <span class="badge bg-success">Automatic</span>
+                    {% endif %}
+                </td>
+
+                <!-- Present/Absent -->
+                <td class="text-success fw-bold">{{ s.present }}</td>
+                <td class="text-danger fw-bold">{{ s.absent }}</td>
+
+                <!-- Actions -->
+                <td>
+                    <a href="{{ url_for('main.edit_attendance', attendance_id=s.attendance.id) }}"
+                       class="btn btn-sm btn-primary">
+                        View
+                    </a>
+
+                    <!-- Info button (logs) -->
+                    <a href="{{ url_for('main.attendance_logs', attendance_id=s.attendance.id) }}"
+                       class="btn btn-sm btn-outline-info"
+                       data-bs-toggle="tooltip" title="View Logs">
+                        <i class="bi bi-info-circle"></i>
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if not session_stats %}
+        <p class="text-muted">No attendance sessions found for this class.</p>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    // Bootstrap tooltip init
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    tooltipTriggerList.map(el => new bootstrap.Tooltip(el))
+});
+</script>
+{% endblock %}

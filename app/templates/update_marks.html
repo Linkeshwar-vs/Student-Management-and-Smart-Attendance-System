@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Update Marks - {{ cls.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3>Update Marks - {{ cls.name }}</h3>
+
+    <p class="text-muted">
+        Use this page to manage student marks for <strong>{{ cls.name }}</strong>.
+    </p>
+
+    <div class="mb-3">
+        <!-- Download template -->
+        <a href="{{ url_for('main.download_marks_csv', class_id=cls.id) }}" class="btn btn-success">
+            <i class="bi bi-download"></i> Download Current/Template CSV
+        </a>
+    </div>
+
+    <hr>
+
+    <!-- Upload CSV -->
+    <form method="POST" enctype="multipart/form-data" class="mt-3">
+        <div class="mb-3">
+            <label for="file" class="form-label">Upload Filled CSV</label>
+            <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+            <div class="form-text">
+                The CSV must have <strong>reg_no</strong> as the first column.  
+                Exam columns can be <code>exam_1</code>, <code>midterm</code>, etc.  
+                Values may be numbers, <code>Abs</code>, or left blank (will be stored as "Not Available").
+            </div>
+        </div>
+        <button type="submit" class="btn btn-primary">
+            <i class="bi bi-upload"></i> Upload & Update Marks
+        </button>
+        <a href="{{ url_for('main.class_marks', class_id=cls.id) }}" class="btn btn-secondary">Back</a>
+    </form>
+
+    <hr>
+
+    <!-- Preview Student List -->
+    <h5 class="mt-4">Students in this Class</h5>
+    <table class="table table-sm table-striped">
+        <thead>
+            <tr>
+                <th>Reg No</th>
+                <th>Name</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in students %}
+            <tr>
+                <td>{{ s.reg_no }}</td>
+                <td>{{ s.name }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}Student Records - {{ student.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+  <div class="d-flex justify-content-between align-items-center">
+    <h3>Attendance Records - {{ student.name }}</h3>
+    <a href="{{ url_for('main.list_students') }}" class="btn btn-secondary btn-sm">Back</a>
+  </div>
+
+  <!-- Top summary -->
+  <div class="row mt-3">
+    <div class="col-md-6">
+      <h5>Classes & Attendance %</h5>
+      <table class="table table-sm table-striped">
+        <thead>
+          <tr><th>Class</th><th>Teacher</th><th>Total</th><th>Attended</th><th>Missed</th><th>%</th></tr>
+        </thead>
+        <tbody>
+          {% for cs in class_stats %}
+          <tr>
+            <td>{{ cs.class_name }}</td>
+            <td>{{ cs.teacher_name or '-' }}</td>
+            <td>{{ cs.total_sessions }}</td>
+            <td>{{ cs.attended }}</td>
+            <td>{{ cs.missed }}</td>
+            <td>{{ cs.percent if cs.percent is not none else '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="col-md-6">
+      <h5>Overall</h5>
+      <div class="card p-3" style="height: 300px;">
+        <canvas id="overallPie"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Class selector + details -->
+  <div class="row mt-4">
+    <div class="col-md-4">
+      <label for="classSelect">Select class</label>
+      <select id="classSelect" class="form-select">
+        <option value="">-- Select class --</option>
+        {% for cs in class_stats %}
+        <option value="{{ cs.class_id }}">{{ cs.class_name }} ({{ cs.total_sessions }} sessions)</option>
+        {% endfor %}
+      </select>
+
+      <div class="card mt-3 p-3">
+        <h6>Class Summary</h6>
+        <p id="classSummary">Select a class to view details.</p>
+      </div>
+    </div>
+
+    <div class="col-md-8">
+      <div class="card p-3 mb-3" style="height: 300px;">
+        <h6>Attendance over dates</h6>
+        <canvas id="dateChart"></canvas>
+      </div>
+
+      <div class="card p-3 mb-3" style="height: 300px;">
+        <h6>Attendance by hour (when classes happened)</h6>
+        <canvas id="hourChart"></canvas>
+      </div>
+
+      <div class="card p-3" style="height: 300px;">
+        <h6>Attendance by weekday</h6>
+        <canvas id="weekdayChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Chart.js + plugin -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
+
+<script>
+const classStats = {{ class_stats|tojson }};
+const overallPresent = {{ overall_present }};
+const overallTotal = {{ overall_total }};
+
+// Overall pie
+const overallCtx = document.getElementById('overallPie').getContext('2d');
+const overallChart = new Chart(overallCtx, {
+    type: 'doughnut',
+    data: {
+        labels: ['Present','Absent'],
+        datasets: [{
+            data: [overallPresent, Math.max(0, overallTotal - overallPresent)],
+            backgroundColor: ['#28a745', '#dc3545']
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'bottom' },
+            zoom: {
+                zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
+            }
+        }
+    }
+});
+
+// class details charts
+let dateChart = null;
+let hourChart = null;
+let weekdayChart = null;
+
+document.getElementById('classSelect').addEventListener('change', function(){
+    const classId = this.value;
+    if(!classId) {
+        document.getElementById('classSummary').innerText = 'Select a class to view details.';
+        [dateChart, hourChart, weekdayChart].forEach(c => { if(c){ c.destroy(); }});
+        dateChart = hourChart = weekdayChart = null;
+        return;
+    }
+
+    fetch(`{{ url_for('main.student_class_details', student_id=student.id, class_id=0) }}`.replace('/0/', `/${classId}/`))
+    .then(r => r.json())
+    .then(data => {
+        if(data.error) { alert('Error: ' + data.error); return; }
+
+        const rows = data.rows;
+        const total = rows.length;
+        const attended = rows.filter(r=> r.present).length;
+        const missed = total - attended;
+        document.getElementById('classSummary').innerHTML =
+            `<p><strong>Total sessions:</strong> ${total} <strong>Attended:</strong> ${attended} <strong>Missed:</strong> ${missed}</p>`;
+
+        // destroy old charts
+        [dateChart, hourChart, weekdayChart].forEach(c => { if(c){ c.destroy(); }});
+        dateChart = hourChart = weekdayChart = null;
+
+        // Date line chart
+        const labels = rows.map(r => r.date);
+        const presentSeries = rows.map(r => r.present ? 1 : 0);
+        const ctxDate = document.getElementById('dateChart').getContext('2d');
+        dateChart = new Chart(ctxDate, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Attendance (1=Present, 0=Absent)',
+                    data: presentSeries,
+                    borderColor: '#007bff',
+                    fill: false,
+                    tension: 0.3,
+                    pointBackgroundColor: presentSeries.map(v => v ? '#28a745' : '#dc3545')
+                }]
+            },
+            options: {
+                scales: {
+                    y: { ticks: { stepSize: 1 }, min: 0, max: 1 }
+                },
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        // Hour chart
+        const hours = Array.from({length:24}, (_,i)=>i);
+        const presentByHour = Array(24).fill(0);
+        const totalByHour = Array(24).fill(0);
+        rows.forEach(r => {
+            const h = parseInt(r.hour);
+            totalByHour[h] += 1;
+            if(r.present) presentByHour[h] += 1;
+        });
+        const ctxHour = document.getElementById('hourChart').getContext('2d');
+        hourChart = new Chart(ctxHour, {
+            type: 'bar',
+            data: {
+                labels: hours,
+                datasets: [
+                    { label: 'Present', data: presentByHour, backgroundColor: '#28a745' },
+                    { label: 'Absent', data: hours.map((h,i)=> totalByHour[i]-presentByHour[i]), backgroundColor: '#dc3545' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { x: { title: { display: true, text: 'Hour of day' } } }
+            }
+        });
+
+        // Weekday chart
+        const weekdays = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+        const presentByDay = Array(7).fill(0);
+        const totalByDay = Array(7).fill(0);
+        rows.forEach(r => {
+            const d = new Date(r.date);
+            const w = d.getDay();
+            totalByDay[w] += 1;
+            if(r.present) presentByDay[w] += 1;
+        });
+        const ctxWeekday = document.getElementById('weekdayChart').getContext('2d');
+        weekdayChart = new Chart(ctxWeekday, {
+            type: 'bar',
+            data: {
+                labels: weekdays,
+                datasets: [
+                    { label: 'Present', data: presentByDay, backgroundColor: '#28a745' },
+                    { label: 'Absent', data: weekdays.map((d,i)=> totalByDay[i]-presentByDay[i]), backgroundColor: '#dc3545' }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { x: { title: { display: true, text: 'Day of week' } } }
+            }
+        });
+
+    }).catch(err => {
+        console.error(err);
+        alert('Failed to load class details.');
+    });
+});
+</script>
+{% endblock %}

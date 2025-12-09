@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Auto Attendance Setup{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h3>Auto Attendance Setup – {{ cls.name }}</h3>
+
+    <form method="POST">
+        <!-- Master toggle -->
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="auto_attendance" name="auto_attendance"
+                   {% if cls.auto_attendance %}checked{% endif %}>
+            <label class="form-check-label" for="auto_attendance">Enable Auto Attendance</label>
+        </div>
+
+        <hr>
+
+        <!-- QR Config -->
+        <h5>QR Code</h5>
+        <div class="mb-3">
+            <label class="form-label">QR Type</label>
+            <select class="form-select" name="auto_qr_type">
+                <option value="" {% if not cls.auto_qr_type %}selected{% endif %}>Disabled</option>
+                <option value="static" {% if cls.auto_qr_type == 'static' %}selected{% endif %}>Static</option>
+                <option value="rotate" {% if cls.auto_qr_type == 'rotate' %}selected{% endif %}>Rotating</option>
+            </select>
+        </div>
+        <div class="mb-3">
+            <label class="form-label">Rotation Interval (seconds)</label>
+            <input type="number" class="form-control w-25" name="auto_qr_rotate_seconds"
+                   min="5" value="{{ cls.auto_qr_rotate_seconds or 10 }}">
+        </div>
+
+        <hr>
+
+        <!-- Geo Config -->
+        <h5>Geo Location</h5>
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="auto_geo_enabled" name="auto_geo_enabled"
+                   {% if cls.auto_geo_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="auto_geo_enabled">Enable Geo Validation</label>
+        </div>
+
+        <div id="geoOptions" {% if not cls.auto_geo_enabled %}style="display:none"{% endif %}>
+            <label class="form-label">Select Class Location:</label>
+            <div id="map" style="height:400px; border:1px solid #ccc;"></div>
+            <input type="hidden" name="auto_geo_lat" id="geo_lat" value="{{ cls.auto_geo_lat or '' }}">
+            <input type="hidden" name="auto_geo_lng" id="geo_lng" value="{{ cls.auto_geo_lng or '' }}">
+
+            <p class="mt-2">
+                <strong>Latitude:</strong> <span id="latDisplay">{{ cls.auto_geo_lat or '-' }}</span> |
+                <strong>Longitude:</strong> <span id="lngDisplay">{{ cls.auto_geo_lng or '-' }}</span>
+            </p>
+
+            <label for="geo_radius" class="form-label mt-2">Proximity Distance (meters):</label>
+            <input type="number" class="form-control w-25" name="auto_geo_radius" id="geo_radius"
+                   min="10" value="{{ cls.auto_geo_radius or 50 }}">
+        </div>
+
+        <hr>
+
+        <!-- Face Config -->
+        <h5>Face Recognition</h5>
+        <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="auto_face_enabled" name="auto_face_enabled"
+                   {% if cls.auto_face_enabled %}checked{% endif %}>
+            <label class="form-check-label" for="auto_face_enabled">Enable Face Recognition</label>
+        </div>
+        <div id="face-stats" class="alert alert-info" style="display:none;">
+            Loading face stats…
+        </div>
+
+        <!-- Spoof Detection -->
+        <div class="form-check mt-2" id="spoofOption" style="display:none;">
+            <input class="form-check-input" type="checkbox" name="auto_spoof_detection" id="spoofDetection"
+                   {% if cls.auto_spoof_detection %}checked{% endif %}>
+            <label class="form-check-label" for="spoofDetection">
+                Enable Spoof Detection <span class="badge bg-warning">Beta</span>
+            </label>
+        </div>
+
+        <hr>
+
+        <button type="submit" class="btn btn-success">Save Settings</button>
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Cancel</a>
+    </form>
+</div>
+
+<!-- Leaflet -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    const geoToggle = document.getElementById("auto_geo_enabled");
+    const geoOptions = document.getElementById("geoOptions");
+    const faceToggle = document.getElementById("auto_face_enabled");
+    const spoofOption = document.getElementById("spoofOption");
+
+    function handleGeoToggle() {
+        geoOptions.style.display = geoToggle.checked ? "block" : "none";
+        if (geoToggle.checked) setTimeout(initMap, 500);
+    }
+
+    function handleFaceToggle() {
+        spoofOption.style.display = faceToggle.checked ? "block" : "none";
+    }
+
+    geoToggle.addEventListener("change", handleGeoToggle);
+    faceToggle.addEventListener("change", handleFaceToggle);
+
+    // ✅ Run once on page load
+    handleGeoToggle();
+    handleFaceToggle();
+
+    // Map initialization
+    function initMap() {
+        if (window.mapInitialized) return;
+        window.mapInitialized = true;
+
+        const latInput = document.getElementById("geo_lat");
+        const lngInput = document.getElementById("geo_lng");
+        const latDisplay = document.getElementById("latDisplay");
+        const lngDisplay = document.getElementById("lngDisplay");
+        const radiusInput = document.getElementById("geo_radius");
+
+        const initLat = parseFloat(latInput.value) || 12.9716;
+        const initLng = parseFloat(lngInput.value) || 77.5946;
+
+        const map = L.map("map").setView([initLat, initLng], 15);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "© OpenStreetMap contributors"
+        }).addTo(map);
+
+        let marker = L.marker([initLat, initLng], {draggable:true}).addTo(map);
+        let circle = L.circle([initLat, initLng], {
+            radius: parseInt(radiusInput.value),
+            color: "blue",
+            fillOpacity: 0.2
+        }).addTo(map);
+
+        marker.on("dragend", function(evt) {
+            const pos = evt.target.getLatLng();
+            updateLatLng(pos.lat, pos.lng);
+            circle.setLatLng(pos);
+        });
+
+        map.on("click", function(e) {
+            marker.setLatLng(e.latlng);
+            updateLatLng(e.latlng.lat, e.latlng.lng);
+            circle.setLatLng(e.latlng);
+        });
+
+        radiusInput.addEventListener("input", function() {
+            circle.setRadius(parseInt(this.value));
+        });
+
+        function updateLatLng(lat, lng) {
+            latInput.value = lat;
+            lngInput.value = lng;
+            latDisplay.innerText = lat.toFixed(6);
+            lngDisplay.innerText = lng.toFixed(6);
+        }
+    }
+
+    // Face stats loader
+    fetch("{{ url_for('main.get_face_stats', class_id=cls.id) }}")
+      .then(resp => resp.json())
+      .then(data => {
+        document.getElementById("face-stats").style.display = "block";
+        if (data.error) {
+            document.getElementById("face-stats").innerText = data.error;
+        } else {
+            document.getElementById("face-stats").innerText =
+                `Total: ${data.total}, With embeddings: ${data.with_embeddings}, Without: ${data.without_embeddings}`;
+        }
+      });
+});
+</script>
+{% endblock %}

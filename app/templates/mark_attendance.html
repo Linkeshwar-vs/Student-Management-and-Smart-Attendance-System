@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-5">
+  <h3>Mark Attendance - {{ attendance.class_rel.name }}</h3>
+  <p>Session started: {{ attendance.created_at.strftime("%Y-%m-%d %H:%M") }}</p>
+
+  <!-- Overall Attendance Status -->
+  {% set record = attendance.records | selectattr("student_id", "equalto", session.get("student_id")) | first %}
+  <div class="mb-3">
+    <span class="fw-bold">Your Attendance Status: </span>
+    {% if record and record.is_present %}
+      <span id="attendance-status" class="badge bg-success"> Marked Present</span>
+    {% else %}
+      <span id="attendance-status" class="badge bg-danger"> Not Marked</span>
+    {% endif %}
+  </div>
+
+  <!-- Session Info -->
+  <div id="status" class="alert alert-info mb-3">
+    Waiting for validation...
+  </div>
+
+  <!-- Validation Status Indicators -->
+  <ul class="list-group mb-4" id="validation-status">
+    {% if "qr" in attendance.methods %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      QR Code
+      <span id="qr-status" class="badge bg-warning text-dark">⏳ Waiting...</span>
+    </li>
+    {% endif %}
+    {% if "geo" in attendance.methods %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      Geo Location
+      <span id="geo-status" class="badge bg-warning text-dark">⏳ Waiting...</span>
+    </li>
+    {% endif %}
+    {% if "face" in attendance.methods %}
+    <li class="list-group-item d-flex justify-content-between align-items-center">
+      Face Recognition
+      <span id="face-status" class="badge bg-warning text-dark">⏳ Waiting...</span>
+    </li>
+    {% endif %}
+  </ul>
+
+  <!-- Camera Launch Buttons -->
+  {% if "qr" in attendance.methods %}
+    <button class="btn btn-primary w-100 mb-3" onclick="openQRScanner()">Open QR Scanner</button>
+  {% endif %}
+  {% if "face" in attendance.methods %}
+    <button class="btn btn-primary w-100" onclick="openFaceModal()">Open Face Recognition</button>
+  {% endif %}
+</div>
+
+<!-- QR Modal -->
+<div id="qr-modal" class="modal">
+  <div class="modal-content">
+    <button class="close-btn" onclick="closeQRScanner()">✕</button>
+    <h4 class="mb-3 text-white">QR Scanner</h4>
+    <div id="reader" style="width: 100%; max-width: 400px; margin: auto;"></div>
+  </div>
+</div>
+
+<!-- Face Modal -->
+<div id="face-modal" class="modal">
+  <div class="modal-content">
+    <button class="close-btn" onclick="closeFaceModal()">✕</button>
+    <h4 class="mb-3 text-white">Face Recognition</h4>
+    <p id="face-message" class="text-danger"></p>
+    <video id="video" autoplay></video>
+    <button id="capture-btn" class="btn btn-success mt-3">Capture & Submit</button>
+    <canvas id="capture-canvas" width="320" height="240" style="display:none;"></canvas>
+  </div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+const attendanceId = {{ attendance.id }};
+const rotateSeconds = {{ attendance.qr_rotate_seconds or 10 }};
+const requiredMethods = {{ attendance.methods.split(",")|tojson }};
+
+let qrValidated = false, geoValidated = false, faceValidated = false;
+let qrScanner = null, faceStream = null;
+
+// --- Badge updater ---
+function updateBadge(id, validated) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.className = validated ? "badge bg-success" : "badge bg-warning text-dark";
+  el.innerText = validated ? "✅ Validated" : "⏳ Waiting...";
+}
+
+// --- QR Scanner ---
+function openQRScanner() {
+  document.getElementById("qr-modal").style.display = "flex";
+  qrScanner = new Html5Qrcode("reader");
+  qrScanner.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 250 },
+    qrCodeMessage => {
+      if (qrValidated) return;
+      fetch(`/student/submit_qr/${attendanceId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qr: qrCodeMessage })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          updateBadge("qr-status", true);
+          qrValidated = true;
+          closeQRScanner();
+        } else {
+          document.getElementById("qr-status").className = "badge bg-danger";
+          document.getElementById("qr-status").innerText = "❌ Invalid";
+        }
+      });
+    }
+  ).catch(err => alert("Camera error: " + err));
+}
+function closeQRScanner() {
+  document.getElementById("qr-modal").style.display = "none";
+  if (qrScanner) qrScanner.stop().then(() => qrScanner.clear());
+}
+
+// --- Face Recognition ---
+async function openFaceModal() {
+  document.getElementById("face-modal").style.display = "flex";
+  const resp = await fetch(`/student/face_status/${attendanceId}`);
+  const data = await resp.json();
+  if (!data.has_embedding) {
+    document.getElementById("face-message").textContent =
+      "Valid student image missing. Request admin to upload.";
+    return;
+  }
+  const video = document.getElementById("video");
+  faceStream = await navigator.mediaDevices.getUserMedia({ video: true });
+  video.srcObject = faceStream;
+
+  document.getElementById("capture-btn").onclick = async () => {
+    const canvas = document.getElementById("capture-canvas");
+    const context = canvas.getContext("2d");
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const imgData = canvas.toDataURL("image/jpeg");
+
+    const response = await fetch(`/student/submit_face/${attendanceId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ img_base64: imgData })
+    });
+    const result = await response.json();
+    if (result.success) {
+      updateBadge("face-status", true);
+      faceValidated = true;
+      alert("Face verified! Attendance marked.");
+      closeFaceModal();
+    } else {
+      // 🔥 Keep camera open, show error
+      document.getElementById("face-message").textContent =
+        result.error || "Face verification failed. Try again.";
+    }
+  };
+}
+function closeFaceModal() {
+  document.getElementById("face-modal").style.display = "none";
+  if (faceStream) {
+    faceStream.getTracks().forEach(track => track.stop());
+    faceStream = null;
+  }
+}
+
+// --- Geo validation ---
+function sendGeo() {
+  if (!requiredMethods.includes("geo") || geoValidated) return;
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(pos => {
+      fetch(`/student/submit_geo/${attendanceId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+      })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success) {
+          updateBadge("geo-status", true);
+          geoValidated = true;
+        } else {
+          document.getElementById("geo-status").className = "badge bg-danger";
+          document.getElementById("geo-status").innerText = "❌ Invalid";
+        }
+      });
+    }, () => {
+      document.getElementById("geo-status").className = "badge bg-danger";
+      document.getElementById("geo-status").innerText = "❌ Cannot retrieve";
+    });
+  }
+}
+
+// --- Polling ---
+function pollSession() {
+  fetch(`/student/check_session/${attendanceId}`)
+    .then(r => r.json())
+    .then(data => {
+      const statusEl = document.getElementById("status");
+      const attStatus = document.getElementById("attendance-status");
+
+      if (!data.active) {
+        statusEl.className = "alert alert-secondary";
+        statusEl.innerText = "❌ Session closed.";
+        attStatus.className = "badge bg-dark";
+        attStatus.innerText = "Session Inactive";
+        clearInterval(pollingInterval);
+        return;
+      }
+
+      statusEl.className = "alert alert-info";
+      statusEl.innerText = "Session Active...";
+      if (data.validation.qr) qrValidated = true;
+      if (data.validation.geo) geoValidated = true;
+      if (data.validation.face) faceValidated = true;
+      if (requiredMethods.includes("qr")) updateBadge("qr-status", qrValidated);
+      if (requiredMethods.includes("geo")) updateBadge("geo-status", geoValidated);
+      if (requiredMethods.includes("face")) updateBadge("face-status", faceValidated);
+      attStatus.className = data.present ? "badge bg-success" : "badge bg-danger";
+      attStatus.innerText = data.present ? "✅ Marked Present" : "❌ Not Marked";
+    });
+}
+
+// --- Start ---
+sendGeo();
+pollSession();
+const pollingInterval = setInterval(pollSession, rotateSeconds * 1000);
+</script>
+
+<style>
+.modal {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  padding: 10px; /* small edge gap */
+}
+
+.modal-content {
+  background: #000;
+  padding: 10px;
+  border-radius: 15px;
+  text-align: center;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+}
+
+.close-btn {
+  position: absolute;
+  top: 15px; right: 15px;
+  border: none;
+  background: rgba(255,255,255,0.2);
+  color: #fff;
+  border-radius: 50%;
+  width: 40px; height: 40px;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+video {
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  max-height: 80vh;
+}
+
+.text-white { color: #fff; }
+</style>
+{% endblock %}

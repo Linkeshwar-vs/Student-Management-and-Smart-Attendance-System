@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+
+  <!-- Welcome Section -->
+  <div class="mb-4">
+    <h2 class="fw-bold">Welcome, {{ student.name }}</h2>
+    <p class="text-muted">Reg No: {{ student.reg_no }}</p>
+  </div>
+
+  <!-- Profile Button -->
+  <div class="mb-3">
+    <a href="{{ url_for('student.profile') }}" class="btn btn-outline-secondary">
+      My Profile
+    </a>
+  </div>
+
+  <!-- My Classes -->
+  <h4 class="mt-4">My Classes</h4>
+  {% if classes %}
+    <div class="row">
+      {% for cls in classes %}
+        <div class="col-md-4">
+          <div class="card shadow-sm mb-3">
+            <div class="card-body">
+              <h5 class="card-title">{{ cls.name }}</h5>
+              <p class="card-text">
+                Batch: {{ cls.batch or "N/A" }}<br>
+                Teacher: {{ cls.teacher.name }}
+              </p>
+              <a href="{{ url_for('student.view_attendance', class_id=cls.id) }}" 
+                 class="btn btn-outline-primary btn-sm">
+                View Attendance
+              </a>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted">You are not enrolled in any classes yet.</p>
+  {% endif %}
+
+
+
+  <!-- Ongoing Attendance -->
+  <h4 class="mt-5">Ongoing Attendance Sessions</h4>
+  {% if ongoing %}
+    {% for att in ongoing %}
+      <div class="card p-3 mt-2 shadow-sm">
+        <p>
+          <strong>Class:</strong> {{ att.class_rel.name }}<br>
+          <strong>Started:</strong> {{ att.created_at.strftime("%Y-%m-%d %H:%M") }}
+        </p>
+        <a href="{{ url_for('student.mark_attendance_page', attendance_id=att.id) }}" 
+           class="btn btn-success">
+          Go to Attendance
+        </a>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="text-muted">No ongoing attendance sessions right now.</p>
+  {% endif %}
+
+  <!-- Quizzes Section -->
+  <h4 class="mt-5">Quizzes</h4>
+
+  <!-- Live Quizzes -->
+  {% if live_quizzes %}
+    {% for quiz in live_quizzes %}
+      <div class="card p-3 mt-2 shadow-sm border-warning">
+        <p class="mb-2">
+          <strong>Quiz:</strong> {{ quiz.title }} (Live)<br>
+          <strong>Class:</strong> {{ quiz.class_rel.name }}<br>
+          {% if quiz.end_time %}
+            Closes: {{ quiz.end_time.strftime("%Y-%m-%d %H:%M") }}<br>
+          {% endif %}
+          {% if quiz.time_limit_seconds and quiz.time_limit_seconds > 0 %}
+            <strong>Time Limit:</strong> {{ quiz.time_limit_seconds // 60 }} min
+          {% endif %}
+        </p>
+        <a href="{{ url_for('student.take_quiz', quiz_id=quiz.id) }}" class="btn btn-warning">
+          Take Quiz
+        </a>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="text-muted">No live quizzes available right now.</p>
+  {% endif %}
+
+  <!-- Locked Quizzes -->
+  {% if locked_quizzes %}
+    {% for quiz in locked_quizzes %}
+      <div class="card p-3 mt-2 shadow-sm border-secondary bg-light text-muted">
+        <p class="mb-2">
+          <strong>Quiz:</strong> {{ quiz.title }} (Locked)<br>
+          <strong>Class:</strong> {{ quiz.class_rel.name }}<br>
+          {% if quiz.start_time %}
+            Opens: {{ quiz.start_time.strftime("%Y-%m-%d %H:%M") }}<br>
+          {% endif %}
+          {% if quiz.end_time %}
+            Closes: {{ quiz.end_time.strftime("%Y-%m-%d %H:%M") }}
+          {% endif %}
+        </p>
+        <button class="btn btn-secondary btn-sm" disabled>Locked</button>
+      </div>
+    {% endfor %}
+  {% endif %}
+
+</div>
+{% endblock %}

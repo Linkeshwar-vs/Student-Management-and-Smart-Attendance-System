@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Attendance Logs{% endblock %}
+
+{% block content %}
+<div class="container my-4">
+    <h3>Attendance Logs ({{ attendance.class_rel.name }})</h3>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Teacher</th>
+                <th>Student</th>
+                <th>Action</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr>
+                <td>{{ log.teacher.name }}</td>
+                <td>{{ log.student.name if log.student else "N/A" }}</td>
+                <td>{{ log.action }}</td>
+                <td>{{ log.timestamp|localtime }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

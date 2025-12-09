@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% block title %}Manage Students{% endblock %}
+
+{% block content %}
+<h2>Manage Students</h2>
+
+<!-- Filter form -->
+<form method="GET" class="row g-3 mb-3">
+    <div class="col-md-3">
+        <input type="text" name="search" class="form-control" placeholder="Search name/email/reg no" value="{{ search }}">
+    </div>
+    <div class="col-md-2">
+        <input type="text" name="branch" class="form-control" placeholder="Branch" value="{{ branch }}">
+    </div>
+    <div class="col-md-2">
+        <input type="text" name="specialization" class="form-control" placeholder="Specialization" value="{{ specialization }}">
+    </div>
+    <div class="col-md-2">
+        <input type="text" name="batch" class="form-control" placeholder="Batch" value="{{ batch }}">
+    </div>
+    <div class="col-md-3">
+        <button type="submit" class="btn btn-primary">Filter</button>
+        <a href="{{ url_for('main.list_students') }}" class="btn btn-secondary">Reset</a>
+    </div>
+</form>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Photo</th>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Reg No</th>
+            <th>Branch</th>
+            <th>Specialization</th>
+            <th>Batch</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody id="studentsTable">
+        {% for s in students %}
+        <tr data-student-id="{{ s.id }}">
+            <td>
+                <div class="photo-wrapper" style="position: relative; display: inline-block;">
+                    {% if s.image_path %}
+                        <img src="{{ url_for('uploaded_file', filename=s.image_path) }}"
+                             alt="Student Image"
+                             style="width:50px;height:50px;border-radius:50%;">
+                    {% else %}
+                        <img src="{{ url_for('static', filename='default.png') }}"
+                             style="width:50px;height:50px;border-radius:50%;">
+                    {% endif %}
+                    <span class="status-dot dot-red"></span>
+                </div>
+            </td>
+            <td>{{ s.name }}</td>
+            <td>{{ s.email }}</td>
+            <td>{{ s.reg_no }}</td>
+            <td>{{ s.branch or '-' }}</td>
+            <td>{{ s.specialization or '-' }}</td>
+            <td>{{ s.batch or '-' }}</td>
+            <td>
+                <a href="{{ url_for('main.edit_student', student_id=s.id) }}" class="btn btn-sm btn-warning">Edit</a>
+                <a href="{{ url_for('main.view_student_records', student_id=s.id) }}" class="btn btn-sm btn-primary">View Records</a>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<!-- Page Size Selector + Pagination -->
+<div class="d-flex justify-content-between align-items-center mt-3">
+    <div>
+        Show
+        <select id="pageSize" class="form-select d-inline-block w-auto">
+            <option value="10">10</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+            <option value="all">All</option>
+        </select>
+        entries
+    </div>
+    <div>
+        <button id="prevPage" class="btn btn-sm btn-secondary">Previous</button>
+        <span id="pageInfo" class="mx-2"></span>
+        <button id="nextPage" class="btn btn-sm btn-secondary">Next</button>
+    </div>
+</div>
+
+<!-- Styles for embedding dot -->
+<style>
+.status-dot {
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid white; /* optional: makes dot standout on image */
+    background-color: #dc3545; /* red by default */
+}
+.dot-green { background-color: #28a745 !important; }
+.dot-red { background-color: #dc3545 !important; }
+</style>
+
+<!-- Scripts -->
+<script>
+// Poll student embedding status and update dots dynamically
+function pollStudentStatus() {
+    fetch("{{ url_for('main.get_students_status') }}")
+    .then(res => res.json())
+    .then(data => {
+        data.forEach(student => {
+            const row = document.querySelector(`tr[data-student-id='${student.id}']`);
+            if(row){
+                const dot = row.querySelector(".status-dot");
+                if(dot){
+                    if(student.has_embedding){
+                        dot.classList.remove("dot-red");
+                        dot.classList.add("dot-green");
+                    } else {
+                        dot.classList.remove("dot-green");
+                        dot.classList.add("dot-red");
+                    }
+                }
+            }
+        });
+    });
+}
+
+// Poll every 2 seconds
+setInterval(pollStudentStatus, 2000);
+pollStudentStatus();
+
+
+// ---------------- Pagination + Page Size ----------------
+let currentPage = 1;
+let pageSize = 10;
+
+function paginateTable() {
+    const rows = document.querySelectorAll("#studentsTable tr");
+    const totalRows = rows.length;
+    const totalPages = pageSize === "all" ? 1 : Math.ceil(totalRows / pageSize);
+
+    rows.forEach((row, index) => {
+        if (pageSize === "all") {
+            row.style.display = "";
+        } else {
+            const start = (currentPage - 1) * pageSize;
+            const end = start + pageSize;
+            row.style.display = (index >= start && index < end) ? "" : "none";
+        }
+    });
+
+    document.getElementById("pageInfo").textContent =
+        pageSize === "all" ? `All entries` : `Page ${currentPage} of ${totalPages}`;
+
+    document.getElementById("prevPage").disabled = currentPage <= 1 || pageSize === "all";
+    document.getElementById("nextPage").disabled = currentPage >= totalPages || pageSize === "all";
+}
+
+document.getElementById("pageSize").addEventListener("change", function () {
+    pageSize = this.value === "all" ? "all" : parseInt(this.value);
+    currentPage = 1;
+    paginateTable();
+});
+
+document.getElementById("prevPage").addEventListener("click", function () {
+    if (currentPage > 1) {
+        currentPage--;
+        paginateTable();
+    }
+});
+
+document.getElementById("nextPage").addEventListener("click", function () {
+    const rows = document.querySelectorAll("#studentsTable tr").length;
+    const totalPages = Math.ceil(rows / pageSize);
+    if (currentPage < totalPages) {
+        currentPage++;
+        paginateTable();
+    }
+});
+
+paginateTable();
+</script>
+
+{% endblock %}

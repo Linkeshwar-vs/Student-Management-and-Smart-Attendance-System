@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Marks – {{ cls.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3>Marks – {{ cls.name }}</h3>
+        <div>
+            <a href="{{ url_for('main.update_marks', class_id=cls.id) }}" class="btn btn-primary me-2">
+                <i class="bi bi-upload"></i> Update Marks
+            </a>
+            <a href="{{ url_for('main.download_marks_csv', class_id=cls.id) }}" class="btn btn-success">
+                <i class="bi bi-download"></i> Download CSV
+            </a>
+        </div>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-bordered table-hover align-middle text-center">
+            <thead class="table-light">
+                <tr>
+                    <th scope="col">Reg No</th>
+                    <th scope="col">Name</th>
+                    {% for exam in exams %}
+                        <th scope="col">{{ exam }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in students %}
+                <tr>
+                    <td><strong>{{ s.reg_no }}</strong></td>
+                    <td class="text-start">{{ s.name }}</td>
+                    {% for exam in exams %}
+                        {% set mark = marks_data.get(s.id, {}).get(exam, '-') %}
+                        <td>
+                            {% if mark == 'Abs' %}
+                                <span class="badge bg-danger">Abs</span>
+                            {% elif mark == 'Not Available' %}
+                                <span class="text-muted fst-italic">N/A</span>
+                            {% else %}
+                                {{ mark }}
+                            {% endif %}
+                        </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
