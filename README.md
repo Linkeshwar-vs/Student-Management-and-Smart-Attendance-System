@@ -24,7 +24,7 @@ This project implements an automated attendance and student support platform tha
 
 ## Technologies Used
 
-- React.js, Flask, MongoDB
+- React.js, Flask, PostgreSQL
 - Python
 - Face Recognition (InsightFace) + Custom Anti-Spoofing Model
 - Geolocation Services (GPS)
